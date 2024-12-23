@@ -29,7 +29,6 @@ int yMax, xMax;
 
 ATM_UI* init_ui(void) {
     ATM_UI* ui = malloc(sizeof(ATM_UI));
-
     
     // Initialize ncurses
     initscr();
@@ -60,10 +59,21 @@ ATM_UI* init_ui(void) {
     ui->menu_win = derwin(ui->main_win, 10, 40, LINES/2 - 5, COLS/2 - 20);
     box(ui->menu_win, 0, 0);
     wbkgd(ui->menu_win, COLOR_PAIR(1));
-    mvwprintw(ui->menu_win, 0, 2, "MENU");
+    mvwprintw(ui->menu_win, 0, 2, "Welcome to ATM");
     mvwprintw(ui->menu_win, 2, 2, "[*] Login");
     mvwprintw(ui->menu_win, 4, 2, "[ ] Register");
     mvwprintw(ui->menu_win, 6, 2, "[ ] Exit");
+
+    keypad(ui->menu_win, true);
+
+    char *choices[] = {
+        "Login",
+        "Register",
+        "Exit"
+    };
+
+    int choice;
+    int highlight = 0;
     
     // // Create menu window
     // ui->menu_win = derwin(ui->main_win, 6, 20, 2, 2);
@@ -82,9 +92,24 @@ ATM_UI* init_ui(void) {
     // box(ui->details_win, 0, 0);
     
     // // Create message window
-    // ui->message_win = derwin(ui->main_win, 3, COLS-4, LINES-4, 2);
-    // box(ui->message_win, 0, 0);
-    
+    ui->message_win = derwin(ui->main_win, 1, COLS-4, LINES-2, 2);
+    wbkgd(ui->message_win, COLOR_PAIR(2));
+    mvwprintw(ui->message_win, 0, 2, "Use ");
+    wattron(ui->message_win, A_BOLD);
+    wprintw(ui->message_win, "ARROW UP");
+    wattroff(ui->message_win, A_BOLD);
+    wprintw(ui->message_win, " and ");
+    wattron(ui->message_win, A_BOLD);
+    wprintw(ui->message_win, "ARROW DOWN");
+    wattroff(ui->message_win, A_BOLD);
+    wprintw(ui->message_win, " key to select. Press ");
+    wattron(ui->message_win, A_BOLD);
+    wprintw(ui->message_win, "ENTER");
+    wattroff(ui->message_win, A_BOLD);
+    wprintw(ui->message_win, " to confirm. ");
+//Press Enter to confirm.");
+
+
     refresh();
     wrefresh(ui->main_win);
     return ui;
@@ -116,6 +141,46 @@ void update_status(ATM_UI* ui, const char* username, const char* last_login) {
     // wrefresh(ui->status_win);
 }
 
+void update_menu(ATM_UI* ui, int highlight, char* choices[]) {
+    int choice;
+
+    while (1)
+    {
+        for(int i = 0; i < 3; i++)
+        {
+            if(i == highlight) {
+               // wattron(ui->menu_win, A_REVERSE);
+                mvwprintw(ui->menu_win, i*2+2, 2, "[*] %s", choices[i]);
+               // wattroff(ui->menu_win, A_REVERSE);
+            } else {
+                mvwprintw(ui->menu_win, i*2+2, 2, "[ ] %s", choices[i]);
+            }
+        }
+
+        choice = wgetch(ui->menu_win);
+        switch (choice)
+        {
+        case KEY_UP:
+            highlight--;
+            if (highlight == -1)
+                highlight = 0;
+            break;
+        case KEY_DOWN:
+            highlight++;
+            if (highlight == 3)
+                highlight = 2;
+            break;
+        
+        default:
+            break;
+        }
+
+        if(choice == 10)
+            break;
+    }
+    
+}
+
 
 int main() {
     ATM_UI* ui = init_ui();
@@ -123,6 +188,12 @@ int main() {
     // Exemple d'utilisation
     update_status(ui, "Alice", "2024-12-22 14:30");
     show_message(ui, "ATM MANAGEMENT SYSTEM", 0, xMax/2 - 10);
+    char *choices[] = {
+        "Login",
+        "Register",
+        "Exit"
+    };
+    update_menu(ui, 0, choices);
     
     // Boucle principale
     int ch;
