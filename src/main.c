@@ -1,5 +1,7 @@
 #include "ui/windows.h"
 #include <stdlib.h>
+#include <string.h>
+#include <form.h>
 
 #define HEADER_COLOR_PAIR 1
 #define CONTENT_COLOR_PAIR 2
@@ -121,37 +123,7 @@ int update_menu(ATM_UI* ui, int highlight, char* choices[], int num_choices) {
     }
 }
 
-void register_menu(ATM_UI* ui) {
-    ui->register_win = derwin(ui->main_win, 10, 60, LINES / 2 - 5, COLS / 2 - 30);
-    box(ui->register_win, 0, 0);
-    wbkgd(ui->register_win, COLOR_PAIR(HEADER_COLOR_PAIR));
-    wrefresh(ui->register_win);
-
-    mvwprintw(ui->register_win, 0, 2, "Register");
-    mvwprintw(ui->register_win, 2, 2, "Username: ");
-    mvwprintw(ui->register_win, 4, 2, "Password: ");
-    mvwprintw(ui->register_win, 6, 2, "Confirm password: ");
-    wrefresh(ui->register_win);
-}
-
-void login_menu(ATM_UI* ui) {
-    ui->register_win = derwin(ui->main_win, 10, 60, LINES / 2 - 5, COLS / 2 - 30);
-    box(ui->register_win, 0, 0);
-    wbkgd(ui->register_win, COLOR_PAIR(HEADER_COLOR_PAIR));
-    wrefresh(ui->register_win);
-
-    mvwprintw(ui->register_win, 0, 2, "Login");
-    mvwprintw(ui->register_win, 3, 2, "Username: ");
-    mvwprintw(ui->register_win, 6, 2, "Password: ");
-    wrefresh(ui->register_win);
-
-}
-
 void set_button(ATM_UI* ui) {
-    mvwprintw(ui->main_win, LINES / 2 + 6, COLS / 2 + 21, "[ Next ]");
-    mvwprintw(ui->main_win, LINES / 2 + 6, COLS / 2 - 29, "[ Back ]");
-    wrefresh(ui->main_win);
-
     keypad(ui->main_win, TRUE);
     int choice;
 
@@ -178,6 +150,231 @@ void set_button(ATM_UI* ui) {
 
 }
 
+void mask_password_field(FIELD *field) {
+    // Get the current content of the field
+    char *temp = field_buffer(field, 0);
+    if (!temp) return;
+
+    // Create a string of asterisks the same length as the content
+    size_t len = strlen(temp);
+    char *masked = malloc(len + 1);
+    memset(masked, '*', len);
+    masked[len] = '\0';
+
+    // Set the field buffer to show asterisks
+    set_field_buffer(field, 0, masked);
+    free(masked);
+}
+
+void register_menu(ATM_UI* ui) {
+    FIELD *fields[7];
+    FORM *form;
+    char password_buffer[31] = {0};  // Store actual password
+    char confirm_buffer[31] = {0};   // Store confirm password
+    int password_len = 0;
+    int confirm_len = 0;
+    int current_field = 0;
+
+    mvwprintw(ui->main_win, LINES / 2 + 6, COLS / 2 + 21, "[ Next ]");
+    mvwprintw(ui->main_win, LINES / 2 + 6, COLS / 2 - 29, "[ Back ]");
+    wrefresh(ui->main_win);
+
+    ui->register_win = derwin(ui->main_win, 10, 60, LINES / 2 - 5, COLS / 2 - 30);
+    box(ui->register_win, 0, 0);
+    wbkgd(ui->register_win, COLOR_PAIR(HEADER_COLOR_PAIR));
+    
+    fields[0] = new_field(1, 30, 1, 12, 0, 0);  // Username
+    fields[1] = new_field(1, 30, 3, 12, 0, 0);  // Password
+    fields[2] = new_field(1, 30, 5, 12, 0, 0);  // Confirm password
+    fields[3] = NULL;
+
+    for(int i = 0; i < 3; i++) {
+        //set_field_back(fields[i], A_UNDERLINE);
+        field_opts_off(fields[i], O_AUTOSKIP);
+        set_field_opts(fields[i], O_VISIBLE | O_PUBLIC | O_EDIT | O_ACTIVE);
+    }
+
+    form = new_form(fields);
+    set_form_win(form, ui->register_win);
+    set_form_sub(form, derwin(ui->register_win, 8, 58, 1, 1));
+    post_form(form);
+
+    mvwprintw(ui->register_win, 0, 2, "Register");
+    mvwprintw(ui->register_win, 2, 2, "Username:");
+    mvwprintw(ui->register_win, 4, 2, "Password:");
+    mvwprintw(ui->register_win, 6, 2, "Confirm:");
+    
+    curs_set(1);
+    pos_form_cursor(form);
+    wrefresh(ui->register_win);
+
+    int ch;
+    keypad(ui->register_win, TRUE);
+    while((ch = wgetch(ui->register_win)) != KEY_RIGHT && ch != KEY_LEFT) {
+        switch(ch) {
+            case KEY_DOWN:
+                form_driver(form, REQ_NEXT_FIELD);
+                form_driver(form, REQ_END_LINE);
+                current_field = (current_field + 1) % 3;
+                break;
+
+            case KEY_UP:
+                form_driver(form, REQ_PREV_FIELD);
+                form_driver(form, REQ_END_LINE);
+                current_field = (current_field - 1 + 3) % 3;
+                break;
+
+            case KEY_BACKSPACE:
+            case 127:
+                if (current_field == 1 && password_len > 0) {
+                    password_len--;
+                    password_buffer[password_len] = '\0';
+                    set_field_buffer(fields[1], 0, "");
+                    for(int i = 0; i < password_len; i++) {
+                        form_driver(form, '*');
+                    }
+                } else if (current_field == 2 && confirm_len > 0) {
+                    confirm_len--;
+                    confirm_buffer[confirm_len] = '\0';
+                    set_field_buffer(fields[2], 0, "");
+                    for(int i = 0; i < confirm_len; i++) {
+                        form_driver(form, '*');
+                    }
+                } else {
+                    form_driver(form, REQ_DEL_PREV);
+                }
+                break;
+
+            default:
+                if (ch >= 32 && ch <= 126) {  // Printable characters
+                    if (current_field == 1 && password_len < 30) {
+                        password_buffer[password_len++] = ch;
+                        password_buffer[password_len] = '\0';
+                        form_driver(form, '*');
+                    } else if (current_field == 2 && confirm_len < 30) {
+                        confirm_buffer[confirm_len++] = ch;
+                        confirm_buffer[confirm_len] = '\0';
+                        form_driver(form, '*');
+                    } else {
+                        form_driver(form, ch);
+                    }
+                }
+                break;
+        }
+        wrefresh(ui->register_win);
+    }
+
+    curs_set(0);
+
+    set_button(ui);
+
+    // Free resources
+    unpost_form(form);
+    free_form(form);
+    for(int i = 0; i < 3; i++)
+        free_field(fields[i]);
+
+    ungetch(ch);
+}
+
+void login_menu(ATM_UI* ui) {
+    FIELD *fields[3];
+    FORM *form;
+    char password_buffer[31] = {0};  // Store actual password
+    int password_len = 0;
+    int current_field = 0;
+
+    mvwprintw(ui->main_win, LINES / 2 + 6, COLS / 2 + 21, "[ Next ]");
+    mvwprintw(ui->main_win, LINES / 2 + 6, COLS / 2 - 29, "[ Back ]");
+    wrefresh(ui->main_win);
+
+    ui->register_win = derwin(ui->main_win, 10, 60, LINES / 2 - 5, COLS / 2 - 30);
+    box(ui->register_win, 0, 0);
+    wbkgd(ui->register_win, COLOR_PAIR(HEADER_COLOR_PAIR));
+
+    fields[0] = new_field(1, 30, 2, 12, 0, 0);  // Username
+    fields[1] = new_field(1, 30, 5, 12, 0, 0);  // Password
+    fields[2] = NULL;
+
+    for(int i = 0; i < 2; i++) {
+        //set_field_back(fields[i], A_UNDERLINE);
+        field_opts_off(fields[i], O_AUTOSKIP);
+        set_field_opts(fields[i], O_VISIBLE | O_PUBLIC | O_EDIT | O_ACTIVE);
+    }
+
+    form = new_form(fields);
+    set_form_win(form, ui->register_win);
+    set_form_sub(form, derwin(ui->register_win, 8, 58, 1, 1));
+    post_form(form);
+
+    mvwprintw(ui->register_win, 0, 2, "Login");
+    mvwprintw(ui->register_win, 3, 2, "Username:");
+    mvwprintw(ui->register_win, 6, 2, "Password:");
+    
+    curs_set(1);
+    pos_form_cursor(form);
+    wrefresh(ui->register_win);
+
+
+    int ch;
+    keypad(ui->register_win, TRUE);
+    while((ch = wgetch(ui->register_win)) != KEY_RIGHT && ch != KEY_LEFT) {
+        switch(ch) {
+            case KEY_DOWN:
+                form_driver(form, REQ_NEXT_FIELD);
+                form_driver(form, REQ_END_LINE);
+                current_field = (current_field + 1) % 2;
+                break;
+
+            case KEY_UP:
+                form_driver(form, REQ_PREV_FIELD);
+                form_driver(form, REQ_END_LINE);
+                current_field = (current_field - 1 + 2) % 2;
+                break;
+
+            case KEY_BACKSPACE:
+            case 127:
+                if (current_field == 1 && password_len > 0) {
+                    password_len--;
+                    password_buffer[password_len] = '\0';
+                    set_field_buffer(fields[1], 0, "");
+                    for(int i = 0; i < password_len; i++) {
+                        form_driver(form, '*');
+                    }
+                } else {
+                    form_driver(form, REQ_DEL_PREV);
+                }
+                break;
+
+            default:
+                if (ch >= 32 && ch <= 126) {  // Printable characters
+                    if (current_field == 1 && password_len < 30) {
+                        password_buffer[password_len++] = ch;
+                        password_buffer[password_len] = '\0';
+                        form_driver(form, '*');
+                    } else {
+                        form_driver(form, ch);
+                    }
+                }
+                break;
+        }
+        wrefresh(ui->register_win);
+    }
+
+    curs_set(0);
+
+    set_button(ui);
+
+    // Free resources
+    unpost_form(form);
+    free_form(form);
+    for(int i = 0; i < 2; i++)
+        free_field(fields[i]);
+
+    ungetch(ch);
+}
+
+
 int main() {
     ATM_UI* ui = init_ui();
 
@@ -201,11 +398,11 @@ int main() {
         {
         case 1:
             register_menu(ui);
-            set_button(ui);
+            //set_button(ui);
             break;
         case 0:
             login_menu(ui);
-            set_button(ui);
+            //set_button(ui);
             break;
         default:
             break;
