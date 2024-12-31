@@ -2,6 +2,8 @@
     "files.associations": {
         "*.ndjson": "jsonl",
         "*.dbclient-js": "javascript",
-        "windows.h": "c"
-    }
+        "windows.h": "c",
+        "menus.C": "cpp"
+    },
+    "C_Cpp.errorSquiggles": "disabled"
 }
