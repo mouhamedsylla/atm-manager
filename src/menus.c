@@ -17,7 +17,7 @@ static const int MAIN_MENU_ITEMS_COUNT = 3;
 
 // 6. Menu creation functions implementation
 void create_main_menu(ATM_UI* ui) {
-    MainMenu* menu = malloc(sizeof(MainMenu));
+    MainMenu* menu = (MainMenu*)malloc(sizeof(MainMenu));
     menu->items = (char**)MAIN_MENU_ITEMS;
     menu->num_items = MAIN_MENU_ITEMS_COUNT;
     menu->current_item = 0;
@@ -40,7 +40,7 @@ void create_main_menu(ATM_UI* ui) {
 
 // Création du formulaire de connexion
 void create_login_form(ATM_UI* ui) {
-    FormData* form = malloc(sizeof(FormData));
+    FormData* form = (FormData*)malloc(sizeof(FormData));
     form->num_fields = 3;
     form->num_labels = 3;
     form->fields = (FIELD**)malloc(sizeof(FIELD*) * form->num_fields);
@@ -70,10 +70,14 @@ void create_login_form(ATM_UI* ui) {
     
     set_content(ui, CONTENT_LOGIN_FORM, form);
     handle_login_form_input(ui);
+    int ch;
+    while((ch = wgetch(form->window) != 'q')) {
+        
+    }
 }
 
 void create_register_form(ATM_UI* ui) {
-    FormData* form = malloc(sizeof(FormData));
+    FormData* form = (FormData*)malloc(sizeof(FormData));
     form->num_fields = 4;  // username, password, confirm, NULL
     form->num_labels = 4;  // titre + 3 labels
     form->fields = (FIELD**)malloc(sizeof(FIELD*) * form->num_fields);
@@ -330,7 +334,10 @@ void handle_login_form_input(ATM_UI* ui) {
                     break;
                 default:
                     if (ch >= 32 && ch <= 126) {
-                        if (form->current_field == 1 && password_len < 30) {
+                        if (form->current_field == 0 && strlen(form->buffers[0]) < 30) {
+                            form->buffers[0][strlen(form->buffers[0])] = ch;
+                            form_driver(form->form, ch);
+                        } else if (form->current_field == 1 && password_len < 30) {
                             form->buffers[1][password_len++] = ch;
                             form->buffers[1][password_len] = '\0';
                             form_driver(form->form, '*');
@@ -351,24 +358,37 @@ void handle_login_form_input(ATM_UI* ui) {
             
             int button_action = active_button_switch(ui);
             if(button_action == 1) {
-                // Récupération des données
-                strncpy(login_data.username, form->buffers[0], 30);
-                strncpy(login_data.password, form->buffers[1], 30);
-                
-                // Validation
-                if (!validate_login_data(&login_data, error_msg)) {
+                form_driver(form->form, REQ_VALIDATION);  // Valider le champ actuel
+    
+                // Récupération des données en nettoyant les espaces
+                char* username = field_buffer(form->fields[0], 0);
+                char* password = form->buffers[1];  // Pour le mot de passe, on utilise le buffer direct
+    
+                // Nettoyer username (enlever les espaces)
+                char clean_username[31];
+                int j = 0;
+                for(int i = 0; username[i] != '\0' && i < 30; i++) {
+                    if(username[i] != ' ') {
+                        clean_username[j++] = username[i];
+                    }
+                }
+                clean_username[j] = '\0';
+    
+                // Copier les données nettoyées
+                strncpy(login_data.username, clean_username, 30);
+                strncpy(login_data.password, password, 30);
+    
+                // Debug - afficher les données nettoyées
+                update_status(ui, STATUS_INFO, "Attempting to login...");
+    
+                // Appel à la fonction de login DB
+                if (login_user(&login_data, error_msg)) {
+                    update_status(ui, STATUS_SUCCESS, "Login successful!");
+                    editing = false;
+                } else {
                     update_status(ui, STATUS_ERROR, error_msg);
                     continue;
                 }
-
-                // TODO: Appel à la fonction de login DB
-                // if (db_login_user(&login_data, error_msg)) {
-                //     update_status(ui, STATUS_SUCCESS, "Login successful!");
-                //     editing = false;
-                // } else {
-                //     update_status(ui, STATUS_ERROR, error_msg);
-                //     continue;
-                // }
             } else if (button_action == 0) {
                 // Back
                 update_status(ui, STATUS_INFO, "Returning to main menu...");

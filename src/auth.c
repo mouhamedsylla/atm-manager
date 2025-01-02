@@ -2,6 +2,7 @@
 #include <db.h>
 #include <auth.h>
 #include <string.h>
+#include <ncurses.h>
 
 int create_user(const char *username, const char *password) {
     int rc = db_execute(SQL_INSERT_USER, username, password, NULL);
@@ -11,21 +12,67 @@ int create_user(const char *username, const char *password) {
     return rc;
 }
 
-int get_user_by_username(const char *username, User *user) {
-    return -1;
+
+int get_user_callback(void *data, int argc, char **argv, char **azColName) {
+    User *user = (User *)data;
+    
+    // Vérification du nombre de colonnes attendues
+    if (argc != 4) { // id, username, password, created_at
+        return SQLITE_ERROR;
+    }
+
+    // Vérification des valeurs NULL
+    for (int i = 0; i < argc; i++) {
+        if (!argv[i]) {
+            return SQLITE_ERROR;
+        }
+    }
+
+    // Conversion et copie des données
+    user->user_id = atoi(azColName[0]);
+    
+    // Copie sécurisée du username
+    strncpy(user->username, azColName[1], sizeof(user->username) - 1);
+    user->username[sizeof(user->username) - 1] = '\0';
+    
+    // Copie sécurisée du password
+    strncpy(user->password, azColName[2], sizeof(user->password) - 1);
+    user->password[sizeof(user->password) - 1] = '\0';
+    
+    // Conversion de la date string en time_t
+    struct tm tm = {0};
+    if (strptime(azColName[3], "%Y-%m-%d %H:%M:%S", &tm) != NULL) {
+        user->created_at = mktime(&tm);
+    } else {
+        user->created_at = time(NULL); // Fallback à la date actuelle
+    }
+
+    return SQLITE_OK;
 }
 
-int login(const char *username, const char *password) {
-    User user;
-    if (get_user_by_username(username, &user) != 0) {
-        return -1;
-    }
+int get_user_by_username(const char *username, User *user) {
+    int rc = db_query(SQL_SELECT_USER_BY_USERNAME, get_user_callback, user, username, NULL);
 
-    if (strcmp(user.password, password) != 0) {
-        return -1;
+    if (rc != SQLITE_DONE) {
+        return -1;  
     }
-
     return 0;
+}
+
+bool login_user(LoginData *data, char* error_msg) {
+    User user;
+
+    if (get_user_by_username(data->username, &user) != SQLITE_OK) {
+        strcpy(error_msg, "User not found");
+        return false;
+    }
+
+    if (strcmp(user.password, data->password) != 0) {
+        strcpy(error_msg, "Invalid password");
+        return false;
+    }
+
+    return true;
 }
 
 bool register_user(RegisterData *data, char* error_msg) {

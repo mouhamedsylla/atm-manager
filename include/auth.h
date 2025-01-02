@@ -89,7 +89,7 @@ int get_user_by_username(const char *username, User *user);
  * @param password The password of the user.
  * @return 0 if the user is authenticated, -1 otherwise.
  */
-int login(const char *username, const char *password);
+bool login_user(LoginData *data, char* error_msg);
 
 
 /**
